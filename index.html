@@ -830,10 +830,11 @@ function renderMap(){
 }
 
 function renderKpis(){
-  const entregas = records.filter(r=>r.tipo==='Entrega').length;
-  const retiros = records.filter(r=>r.tipo==='Retiro').length;
-  const recargas = records.filter(r=>r.tipo==='Recarga combustible').length;
-  const litros = records.reduce((sum,r)=> sum + (parseFloat(r.litros)||0), 0);
+  const filtrados = getFilteredRecords();
+  const entregas = filtrados.filter(r=>r.tipo==='Entrega').length;
+  const retiros = filtrados.filter(r=>r.tipo==='Retiro').length;
+  const recargas = filtrados.filter(r=>r.tipo==='Recarga combustible').length;
+  const litros = filtrados.reduce((sum,r)=> sum + (parseFloat(r.litros)||0), 0);
   document.getElementById('kpi-entrega').textContent = entregas;
   document.getElementById('kpi-retiro').textContent = retiros;
   document.getElementById('kpi-recarga').textContent = recargas;
@@ -951,9 +952,9 @@ document.getElementById('tbody').addEventListener('click', (e)=>{
   document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
 
-document.getElementById('filt-tipo').addEventListener('change', ()=>{ renderTable(); renderMap(); });
-document.getElementById('filt-zona').addEventListener('change', ()=>{ renderTable(); renderMap(); });
-document.getElementById('filt-ultimo-cliente').addEventListener('change', ()=>{ renderTable(); renderMap(); });
+document.getElementById('filt-tipo').addEventListener('change', ()=>{ renderTable(); renderMap(); renderKpis(); });
+document.getElementById('filt-zona').addEventListener('change', ()=>{ renderTable(); renderMap(); renderKpis(); });
+document.getElementById('filt-ultimo-cliente').addEventListener('change', ()=>{ renderTable(); renderMap(); renderKpis(); });
 
 // ---- CSV export ----
 document.getElementById('btn-export').addEventListener('click', ()=>{
