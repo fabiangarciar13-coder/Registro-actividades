@@ -670,6 +670,14 @@ document.getElementById('btn-registrar').addEventListener('click', async ()=>{
       showToast('Ese número SAP no está en la planilla de equipos. Verifica o selecciónalo de la lista.', 'error');
       return;
     }
+    if(currentTipo === 'Entrega'){
+      const ultimoMovimiento = calcularUltimoMovimientoPorSap();
+      const mov = ultimoMovimiento.get(sapValue);
+      if(mov && mov.tipo === 'Entrega'){
+        showToast(`El equipo SAP ${sapValue} ya está en terreno (cliente ${mov.cliente || '—'}, zona ${mov.zona || '—'}). Debe registrarse su retiro antes de entregarlo de nuevo.`, 'error');
+        return;
+      }
+    }
   }
 
   const payload = {
