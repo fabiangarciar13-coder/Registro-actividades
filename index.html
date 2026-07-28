@@ -661,6 +661,16 @@ document.getElementById('btn-registrar').addEventListener('click', async ()=>{
   }
 
   const sapValue = document.getElementById('f-sap').value.trim();
+  if(sapListoCargado && sapValue){
+    // Refrescamos contra SharePoint justo antes de validar, por si otro técnico
+    // registró una actividad con este mismo SAP hace unos segundos.
+    const btnTemp = document.getElementById('btn-registrar');
+    const textoOriginalBtn = btnTemp.textContent;
+    btnTemp.disabled = true; btnTemp.textContent = 'Verificando SAP...';
+    await loadRecords();
+    btnTemp.disabled = false;
+    btnTemp.textContent = textoOriginalBtn;
+  }
   if(sapListoCargado){
     if(!sapValue){
       showToast('Selecciona un número SAP válido de la lista.', 'error');
