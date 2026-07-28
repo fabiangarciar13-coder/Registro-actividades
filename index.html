@@ -209,7 +209,10 @@
       <p>Entregas · Retiros · Recargas de combustible — equipos de respaldo</p>
     </div>
   </div>
-  <div class="status-pill live" id="storage-status">conectando con SharePoint...</div>
+  <div style="display:flex; align-items:center; gap:10px;">
+    <button id="btn-toggle-estado" style="font-family:var(--mono); font-size:11.5px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); padding:6px 12px; border-radius:20px; color:#e8eef4; cursor:pointer;">📦 Estado de equipos</button>
+    <div class="status-pill live" id="storage-status">conectando con SharePoint...</div>
+  </div>
 </header>
 
 <div class="layout">
@@ -242,7 +245,9 @@
         </div>
         <div>
           <label for="f-sap">Número SAP</label>
-          <input id="f-sap" type="text" placeholder="Ej: 1003125">
+          <input id="f-sap" type="text" placeholder="Ej: 1003125" list="sap-datalist" autocomplete="off">
+          <datalist id="sap-datalist"></datalist>
+          <span id="sap-status" class="mono" style="font-size:10.5px; color:var(--ink-soft); display:block; margin-top:3px;"></span>
         </div>
       </div>
 
@@ -363,6 +368,39 @@
       </div>
     </div>
 
+    <div class="panel" id="panel-estado" style="display:none;">
+      <div class="panel-head">
+        <h2>Estado de equipos</h2>
+        <span class="mono" style="font-size:11px; color:var(--ink-soft);" id="estado-count"></span>
+      </div>
+      <div class="kpis">
+        <div class="kpi"><div class="n" id="kpi-en-terreno">0</div><div class="l">En terreno</div></div>
+        <div class="kpi"><div class="n" id="kpi-disponible">0</div><div class="l">Disponibles</div></div>
+        <div class="kpi"><div class="n" id="kpi-sin-mov">0</div><div class="l">Sin movimientos</div></div>
+        <div class="kpi"><div class="n" id="kpi-total-equipos">0</div><div class="l">Total equipos</div></div>
+      </div>
+      <div class="filters">
+        <input type="text" id="buscar-equipo" placeholder="Buscar por N° SAP...">
+        <select id="filt-estado-equipo">
+          <option value="">Todos los estados</option>
+          <option value="En terreno">En terreno</option>
+          <option value="Disponible">Disponible</option>
+          <option value="Sin movimientos">Sin movimientos</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>N° SAP</th><th>Tipo</th><th>Estado</th><th>Cliente / Zona actual</th><th>Última actividad</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-estado"></tbody>
+        </table>
+        <div class="empty-state" id="empty-estado" style="display:none;">No hay equipos que coincidan con la búsqueda.</div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -372,6 +410,11 @@
 // Endpoints de Power Automate conectados a SharePoint (lista RegistroActividadesED)
 const FLOW_WRITE_URL = 'https://default5f8f1b315fca45ff958cf12d692003.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/25/workflows/3a137abdcd5546c88360bd03270ca075/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=dLUwe2TCMa3xAioAuR6izlew2SKZHEJIjpB3TLkDcoA';
 const FLOW_READ_URL  = 'https://default5f8f1b315fca45ff958cf12d692003.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/21/workflows/82c47590d0334d07ad7a11aa50dab05f/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=Kn3_9sUR3VG_2xvOkvx7FkBYhjn7P9S_u46-ngpmGxo';
+
+// Lista de números SAP válidos (Google Sheets publicado como CSV)
+const SAP_LIST_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRCD6sJdwySHBYGec_LgcUy7xXwt1eUElsQrtMbemVc156xetI9pJQqrCflENZVvVX_ZmfAnJtEsjPV/pub?output=csv';
+let sapValidos = new Map(); // sap -> descripción (si existe)
+let sapListoCargado = false;
 
 let records = [];
 let currentTipo = 'Entrega';
@@ -428,6 +471,49 @@ document.getElementById('btn-foto-quitar').addEventListener('click', ()=>{
   document.getElementById('foto-preview-wrap').style.display = 'none';
   document.getElementById('btn-foto').textContent = '📷 Tomar / adjuntar foto';
 });
+
+// ---- Cargar lista de números SAP válidos ----
+async function cargarListaSap(){
+  const statusEl = document.getElementById('sap-status');
+  if(!SAP_LIST_URL || SAP_LIST_URL.includes('PEGAR_AQUI')){
+    statusEl.textContent = 'validación SAP no configurada';
+    sapListoCargado = false;
+    return;
+  }
+  try{
+    const res = await fetch(SAP_LIST_URL);
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const buf = await res.arrayBuffer();
+    const text = new TextDecoder('utf-8').decode(buf);
+    const rows = text.split(/\r?\n/).filter(r => r.trim() !== '');
+    sapValidos.clear();
+    rows.slice(1).forEach(row=>{ // salta encabezado
+      const cols = row.split(',').map(c => c.replace(/^"|"$/g, '').trim());
+      const sap = cols[0];
+      const desc = cols[1] || '';
+      if(sap) sapValidos.set(sap, desc);
+    });
+    // Poblar datalist
+    const datalist = document.getElementById('sap-datalist');
+    datalist.innerHTML = '';
+    sapValidos.forEach((desc, sap)=>{
+      const opt = document.createElement('option');
+      opt.value = sap;
+      if(desc) opt.label = desc;
+      datalist.appendChild(opt);
+    });
+    sapListoCargado = true;
+    statusEl.textContent = sapValidos.size + ' equipos cargados desde la planilla';
+  }catch(e){
+    console.error('Error cargando lista SAP', e);
+    sapListoCargado = false;
+    statusEl.textContent = 'no se pudo validar contra la planilla — se acepta cualquier valor';
+  }
+  if(document.getElementById('panel-estado').style.display !== 'none'){
+    renderEstadoEquipos();
+  }
+}
+cargarListaSap();
 
 // ---- Tabs (tipo actividad) ----
 document.querySelectorAll('.tab-btn').forEach(btn=>{
@@ -569,6 +655,18 @@ document.getElementById('btn-registrar').addEventListener('click', async ()=>{
   if(!cliente || !tecnico){
     showToast('Completa cliente y técnico responsable.', 'error');
     return;
+  }
+
+  const sapValue = document.getElementById('f-sap').value.trim();
+  if(sapListoCargado){
+    if(!sapValue){
+      showToast('Selecciona un número SAP válido de la lista.', 'error');
+      return;
+    }
+    if(!sapValidos.has(sapValue)){
+      showToast('Ese número SAP no está en la planilla de equipos. Verifica o selecciónalo de la lista.', 'error');
+      return;
+    }
   }
 
   const payload = {
@@ -744,6 +842,97 @@ function renderAll(){
   renderKpis();
 }
 
+// ---- Estado de equipos ----
+let recordsListos = false;
+
+document.getElementById('btn-toggle-estado').addEventListener('click', ()=>{
+  const panel = document.getElementById('panel-estado');
+  const abrir = panel.style.display === 'none';
+  panel.style.display = abrir ? 'block' : 'none';
+  if(abrir){
+    renderEstadoEquipos();
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+});
+
+function calcularUltimoMovimientoPorSap(){
+  const mapa = new Map(); // sap -> registro más reciente de tipo Entrega/Retiro
+  records
+    .filter(r => r.sap && (r.tipo === 'Entrega' || r.tipo === 'Retiro'))
+    .forEach(r=>{
+      const actual = mapa.get(r.sap);
+      if(!actual || new Date(r.fecha) > new Date(actual.fecha)){
+        mapa.set(r.sap, r);
+      }
+    });
+  return mapa;
+}
+
+function renderEstadoEquipos(){
+  if(!sapListoCargado){
+    document.getElementById('estado-count').textContent = 'esperando planilla de equipos...';
+    return;
+  }
+  const ultimoMovimiento = calcularUltimoMovimientoPorSap();
+  const busqueda = document.getElementById('buscar-equipo').value.trim().toLowerCase();
+  const filtroEstado = document.getElementById('filt-estado-equipo').value;
+
+  let enTerreno = 0, disponible = 0, sinMov = 0;
+  const filas = [];
+
+  sapValidos.forEach((tipoEquipo, sap)=>{
+    const mov = ultimoMovimiento.get(sap);
+    let estado, detalle;
+    if(!mov){
+      estado = 'Sin movimientos'; sinMov++;
+      detalle = '—';
+    } else if(mov.tipo === 'Entrega'){
+      estado = 'En terreno'; enTerreno++;
+      detalle = `${mov.cliente || '—'} · ${mov.zona || '—'}`;
+    } else {
+      estado = 'Disponible'; disponible++;
+      detalle = `Bodega · última zona: ${mov.zona || '—'}`;
+    }
+    if(busqueda && !sap.toLowerCase().includes(busqueda)) return;
+    if(filtroEstado && estado !== filtroEstado) return;
+    filas.push({ sap, tipoEquipo, estado, detalle, fecha: mov ? mov.fecha : null });
+  });
+
+  document.getElementById('kpi-en-terreno').textContent = enTerreno;
+  document.getElementById('kpi-disponible').textContent = disponible;
+  document.getElementById('kpi-sin-mov').textContent = sinMov;
+  document.getElementById('kpi-total-equipos').textContent = sapValidos.size;
+  document.getElementById('estado-count').textContent = filas.length + ' de ' + sapValidos.size + ' equipos';
+
+  const tbody = document.getElementById('tbody-estado');
+  const empty = document.getElementById('empty-estado');
+  tbody.innerHTML = '';
+  empty.style.display = filas.length ? 'none' : 'block';
+
+  filas.sort((a,b)=>{
+    // En terreno primero, luego disponible, luego sin movimientos
+    const orden = { 'En terreno': 0, 'Disponible': 1, 'Sin movimientos': 2 };
+    return orden[a.estado] - orden[b.estado];
+  });
+
+  filas.forEach(f=>{
+    const tr = document.createElement('tr');
+    const badgeColor = f.estado === 'En terreno' ? 'var(--green)' : (f.estado === 'Disponible' ? 'var(--teal)' : '#aeb8c2');
+    const fechaFmt = f.fecha ? new Date(f.fecha).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+    tr.innerHTML = `
+      <td class="mono">${f.sap}</td>
+      <td>${f.tipoEquipo}</td>
+      <td><span class="badge" style="background:${badgeColor};">${f.estado}</span></td>
+      <td>${f.detalle}</td>
+      <td class="mono">${fechaFmt}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+document.getElementById('buscar-equipo').addEventListener('input', renderEstadoEquipos);
+document.getElementById('filt-estado-equipo').addEventListener('change', renderEstadoEquipos);
+
 // ---- Clic en fila de la tabla → centrar mapa en ese registro ----
 document.getElementById('tbody').addEventListener('click', (e)=>{
   const tr = e.target.closest('tr[data-id]');
@@ -815,6 +1004,9 @@ async function loadRecords(){
     showToast('No se pudo cargar el historial desde SharePoint.', 'error');
   }
   renderAll();
+  if(document.getElementById('panel-estado').style.display !== 'none'){
+    renderEstadoEquipos();
+  }
 }
 
 initMap();
