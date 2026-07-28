@@ -10,18 +10,18 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --navy:#0f2a47;
-    --navy-deep:#0a1d33;
+    --navy:#da291c;
+    --navy-deep:#b81f15;
     --amber:#f5a623;
     --amber-deep:#c98108;
     --teal:#1b998b;
     --green:#2e9e5b;
-    --red:#d64550;
-    --bg:#f4f6f8;
+    --red:#da291c;
+    --bg:#e5e5e5;
     --panel:#ffffff;
-    --line:#dde3ea;
-    --ink:#16232f;
-    --ink-soft:#5c6b7a;
+    --line:#e0e0e0;
+    --ink:#2b2b2b;
+    --ink-soft:#6b6b6b;
     --mono:'IBM Plex Mono', monospace;
     --sans:'IBM Plex Sans', system-ui, sans-serif;
   }
@@ -34,7 +34,7 @@
     min-height:100vh;
   }
   header{
-    background:linear-gradient(135deg, var(--navy) 0%, var(--navy-deep) 100%);
+    background:var(--navy);
     color:#fff;
     padding:22px 28px;
     display:flex;
@@ -42,7 +42,6 @@
     justify-content:space-between;
     flex-wrap:wrap;
     gap:12px;
-    border-bottom:3px solid var(--amber);
   }
   header .brand{display:flex; align-items:center; gap:14px;}
   header .bolt{
@@ -420,7 +419,7 @@ let currentDireccion = '';
 let currentPhoto = null; // { base64, filename, mimeType }
 let map, markersLayer;
 
-const COLORS = { 'Entrega': '#2e9e5b', 'Retiro': '#d64550', 'Recarga combustible': '#f5a623' };
+const COLORS = { 'Entrega': '#2e9e5b', 'Retiro': '#da291c', 'Recarga combustible': '#f5a623' };
 
 function initMap(){
   map = L.map('map', { scrollWheelZoom: true }).setView([-33.05, -71.55], 9);
@@ -824,7 +823,7 @@ function renderMap(){
   markersById.clear();
   const filtered = getFilteredRecords();
   filtered.forEach(r=>{
-    const color = COLORS[r.tipo] || '#0f2a47';
+    const color = COLORS[r.tipo] || '#da291c';
     const marker = L.circleMarker([r.lat, r.lng], {
       radius: 7, color: '#fff', weight: 2, fillColor: color, fillOpacity: 0.95
     });
