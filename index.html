@@ -252,11 +252,8 @@
       </div>
 
       <div id="equipo-wrap">
-        <label for="f-equipo" id="lbl-equipo">Equipo</label>
-        <select id="f-equipo">
-          <option value="Generador">Generador</option>
-          <option value="Batería">Batería</option>
-        </select>
+        <label for="f-equipo-display" id="lbl-equipo">Equipo (según N° SAP)</label>
+        <input id="f-equipo-display" type="text" readonly placeholder="Se completa al ingresar un N° SAP válido" style="background:var(--bg); color:var(--ink-soft); cursor:not-allowed;">
       </div>
 
       <div id="litros-wrap" style="display:none;">
@@ -515,6 +512,19 @@ async function cargarListaSap(){
 }
 cargarListaSap();
 
+// ---- Autocompletar Equipo según N° SAP ----
+document.getElementById('f-sap').addEventListener('input', ()=>{
+  const sapValue = document.getElementById('f-sap').value.trim();
+  const display = document.getElementById('f-equipo-display');
+  if(sapListoCargado && sapValidos.has(sapValue)){
+    display.value = sapValidos.get(sapValue);
+    display.style.color = 'var(--ink)';
+  } else {
+    display.value = '';
+    display.style.color = 'var(--ink-soft)';
+  }
+});
+
 // ---- Tabs (tipo actividad) ----
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
@@ -522,14 +532,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     btn.classList.add('active');
     currentTipo = btn.dataset.tipo;
     const litrosWrap = document.getElementById('litros-wrap');
-    const equipoWrap = document.getElementById('f-equipo').parentElement;
-    if(currentTipo === 'Recarga combustible'){
-      litrosWrap.style.display = 'block';
-      equipoWrap.style.display = 'none';
-    } else {
-      litrosWrap.style.display = 'none';
-      equipoWrap.style.display = 'block';
-    }
+    litrosWrap.style.display = (currentTipo === 'Recarga combustible') ? 'block' : 'none';
   });
 });
 
@@ -645,7 +648,7 @@ document.getElementById('btn-registrar').addEventListener('click', async ()=>{
   }
   const zona = document.getElementById('f-zona').value;
   const cliente = document.getElementById('f-cliente').value.trim();
-  const equipo = currentTipo === 'Recarga combustible' ? 'Generador' : document.getElementById('f-equipo').value;
+  const equipo = document.getElementById('f-equipo-display').value.trim() || (currentTipo === 'Recarga combustible' ? 'Generador' : '');
   const litros = currentTipo === 'Recarga combustible' ? (document.getElementById('f-litros').value || '0') : '0';
   const tecnico = document.getElementById('f-tecnico').value.trim();
   const fechaInput = document.getElementById('f-fecha').value;
@@ -706,6 +709,7 @@ document.getElementById('btn-registrar').addEventListener('click', async ()=>{
 function resetForm(){
   document.getElementById('f-cliente').value = '';
   document.getElementById('f-sap').value = '';
+  document.getElementById('f-equipo-display').value = '';
   document.getElementById('f-litros').value = '';
   document.getElementById('f-tecnico').value = '';
   document.getElementById('f-fecha').value = '';
