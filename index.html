@@ -677,6 +677,8 @@ function renderTable(){
 
   filtered.forEach(r=>{
     const tr = document.createElement('tr');
+    tr.dataset.id = r.id;
+    tr.style.cursor = 'pointer';
     const fechaFmt = new Date(r.fecha).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' });
     tr.innerHTML = `
       <td><span class="badge ${badgeClass(r.tipo)}">${r.tipo === 'Recarga combustible' ? 'Recarga' : r.tipo}</span></td>
@@ -689,14 +691,17 @@ function renderTable(){
       <td class="mono">${fechaFmt}</td>
       <td style="white-space:normal; max-width:220px;">${r.direccion || '—'}</td>
       <td class="mono">${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}</td>
-      <td><button class="del-btn" onclick="deleteRecord('${r.id}')" title="Eliminar">✕</button></td>
+      <td><button class="del-btn" onclick="event.stopPropagation(); deleteRecord('${r.id}')" title="Eliminar">✕</button></td>
     `;
     tbody.appendChild(tr);
   });
 }
 
+let markersById = new Map();
+
 function renderMap(){
   markersLayer.clearLayers();
+  markersById.clear();
   const filtered = getFilteredRecords();
   filtered.forEach(r=>{
     const color = COLORS[r.tipo] || '#0f2a47';
@@ -717,6 +722,7 @@ function renderMap(){
       </div>
     `);
     marker.addTo(markersLayer);
+    markersById.set(String(r.id), marker);
   });
   document.getElementById('map-count').textContent = filtered.length + ' registros';
 }
@@ -737,6 +743,20 @@ function renderAll(){
   renderMap();
   renderKpis();
 }
+
+// ---- Clic en fila de la tabla → centrar mapa en ese registro ----
+document.getElementById('tbody').addEventListener('click', (e)=>{
+  const tr = e.target.closest('tr[data-id]');
+  if(!tr) return;
+  const marker = markersById.get(String(tr.dataset.id));
+  if(!marker){
+    showToast('Ese registro no está visible en el mapa con los filtros actuales.', 'error');
+    return;
+  }
+  map.flyTo(marker.getLatLng(), 15, { duration: 0.75 });
+  marker.openPopup();
+  document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
 
 document.getElementById('filt-tipo').addEventListener('change', ()=>{ renderTable(); renderMap(); });
 document.getElementById('filt-zona').addEventListener('change', ()=>{ renderTable(); renderMap(); });
