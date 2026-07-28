@@ -560,7 +560,7 @@ document.getElementById('btn-registrar').addEventListener('click', async ()=>{
   const zona = document.getElementById('f-zona').value;
   const cliente = document.getElementById('f-cliente').value.trim();
   const equipo = currentTipo === 'Recarga combustible' ? 'Generador' : document.getElementById('f-equipo').value;
-  const litros = currentTipo === 'Recarga combustible' ? (document.getElementById('f-litros').value || '0') : '';
+  const litros = currentTipo === 'Recarga combustible' ? (document.getElementById('f-litros').value || '0') : '0';
   const tecnico = document.getElementById('f-tecnico').value.trim();
   const fechaInput = document.getElementById('f-fecha').value;
   const fecha = fechaInput ? new Date(fechaInput) : new Date();
@@ -684,7 +684,7 @@ function renderTable(){
       <td>${r.cliente}</td>
       <td class="mono">${r.sap || '—'}</td>
       <td>${r.equipo}</td>
-      <td>${r.litros ? r.litros + ' L' : '—'}</td>
+      <td>${(r.litros && parseFloat(r.litros) > 0) ? r.litros + ' L' : '—'}</td>
       <td>${r.tecnico}</td>
       <td class="mono">${fechaFmt}</td>
       <td style="white-space:normal; max-width:220px;">${r.direccion || '—'}</td>
