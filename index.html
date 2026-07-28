@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Registro de Actividades ED — Entregas, Retiros y Recargas</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#0f2a47;
+    --navy-deep:#0a1d33;
+    --amber:#f5a623;
+    --amber-deep:#c98108;
+    --teal:#1b998b;
+    --green:#2e9e5b;
+    --red:#d64550;
+    --bg:#f4f6f8;
+    --panel:#ffffff;
+    --line:#dde3ea;
+    --ink:#16232f;
+    --ink-soft:#5c6b7a;
+    --mono:'IBM Plex Mono', monospace;
+    --sans:'IBM Plex Sans', system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:var(--sans);
+    background:var(--bg);
+    color:var(--ink);
+    min-height:100vh;
+  }
+  header{
+    background:linear-gradient(135deg, var(--navy) 0%, var(--navy-deep) 100%);
+    color:#fff;
+    padding:22px 28px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:12px;
+    border-bottom:3px solid var(--amber);
+  }
+  header .brand{display:flex; align-items:center; gap:14px;}
+  header .bolt{
+    height:40px; width:auto;
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0; background:#fff; border-radius:6px; padding:5px 8px;
+  }
+  header h1{font-size:17px; margin:0; letter-spacing:.2px; font-weight:600;}
+  header p{margin:2px 0 0; font-size:12.5px; color:#c7d5e3; font-family:var(--mono);}
+  .status-pill{
+    font-family:var(--mono); font-size:11.5px; background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.18); padding:6px 12px; border-radius:20px;
+    color:#e8eef4;
+  }
+  .status-pill.live::before{content:"●"; color:#3ddc84; margin-right:6px;}
+
+  .layout{
+    display:grid;
+    grid-template-columns: 400px 1fr;
+    gap:18px;
+    padding:20px;
+    max-width:1600px;
+    margin:0 auto;
+    align-items:start;
+  }
+  @media (max-width: 980px){
+    .layout{grid-template-columns:1fr;}
+  }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    overflow:hidden;
+  }
+  .panel-head{
+    padding:14px 18px;
+    border-bottom:1px solid var(--line);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .panel-head h2{
+    font-size:12px; text-transform:uppercase; letter-spacing:.08em;
+    margin:0; color:var(--ink-soft); font-weight:600;
+  }
+  .panel-body{padding:18px;}
+
+  .tabs{display:flex; gap:6px; padding:4px; background:var(--bg); border-radius:8px; margin-bottom:16px;}
+  .tab-btn{
+    flex:1; border:none; background:transparent; padding:9px 6px; border-radius:6px;
+    font-family:var(--sans); font-size:12.5px; font-weight:600; cursor:pointer;
+    color:var(--ink-soft); transition:.15s;
+  }
+  .tab-btn.active{background:var(--navy); color:#fff;}
+  .tab-btn[data-tipo="Entrega"].active{background:var(--green);}
+  .tab-btn[data-tipo="Retiro"].active{background:var(--red);}
+  .tab-btn[data-tipo="Recarga combustible"].active{background:var(--amber-deep);}
+
+  label{
+    display:block; font-size:11.5px; font-weight:600; color:var(--ink-soft);
+    text-transform:uppercase; letter-spacing:.04em; margin:14px 0 5px;
+  }
+  label:first-of-type{margin-top:0;}
+  input, select, textarea{
+    width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:7px;
+    font-family:var(--sans); font-size:13.5px; color:var(--ink); background:#fbfcfd;
+  }
+  input:focus, select:focus, textarea:focus{
+    outline:none; border-color:var(--navy); background:#fff;
+  }
+  textarea{resize:vertical; min-height:56px;}
+  .row2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+
+  .geo-box{
+    margin-top:16px; padding:12px; border-radius:8px; background:var(--bg);
+    border:1px dashed var(--line); font-family:var(--mono); font-size:12px;
+  }
+  .geo-box .geo-title{
+    font-family:var(--sans); font-weight:600; font-size:11.5px; text-transform:uppercase;
+    letter-spacing:.04em; color:var(--ink-soft); margin-bottom:6px; display:block;
+  }
+  .geo-status{display:flex; align-items:center; gap:8px; margin-bottom:8px; min-height:18px;}
+  .geo-dot{width:8px;height:8px;border-radius:50%; background:#b8c2cc; flex-shrink:0;}
+  .geo-dot.ok{background:var(--teal);}
+  .geo-dot.err{background:var(--red);}
+  .geo-dot.pending{background:var(--amber); animation:pulse 1s infinite;}
+  @keyframes pulse{50%{opacity:.35;}}
+  .manual-toggle{
+    font-size:11.5px; color:var(--navy); background:none; border:none; text-decoration:underline;
+    cursor:pointer; padding:0; font-family:var(--sans); font-weight:600;
+  }
+  .direccion-item{
+    display:block; width:100%; text-align:left; padding:9px 10px; border:none;
+    border-bottom:1px solid var(--line); background:#fff; cursor:pointer; font-size:12px;
+    font-family:var(--sans); color:var(--ink);
+  }
+  .direccion-item:last-child{border-bottom:none;}
+  .direccion-item:hover{background:var(--bg);}
+
+  .btn{
+    width:100%; margin-top:16px; padding:12px; border:none; border-radius:8px;
+    background:var(--navy); color:#fff; font-family:var(--sans); font-weight:600;
+    font-size:13.5px; cursor:pointer; transition:.15s;
+  }
+  .btn:hover{background:var(--navy-deep);}
+  .btn:disabled{background:#aeb8c2; cursor:not-allowed;}
+  .btn-secondary{
+    background:transparent; border:1px solid var(--line); color:var(--ink-soft); margin-top:8px;
+  }
+  .btn-secondary:hover{background:var(--bg); color:var(--ink);}
+
+  #map{height:420px; width:100%;}
+
+  .table-wrap{max-height:420px; overflow:auto;}
+  table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  thead th{
+    position:sticky; top:0; background:var(--navy); color:#fff; text-align:left;
+    padding:9px 10px; font-weight:600; font-size:11px; text-transform:uppercase;
+    letter-spacing:.03em; white-space:nowrap;
+  }
+  tbody td{padding:9px 10px; border-bottom:1px solid var(--line); white-space:nowrap;}
+  tbody tr:hover{background:#f7fafc;}
+  .badge{
+    display:inline-block; padding:2px 9px; border-radius:20px; font-size:10.5px;
+    font-weight:700; color:#fff; letter-spacing:.02em;
+  }
+  .badge.Entrega{background:var(--green);}
+  .badge.Retiro{background:var(--red);}
+  .badge.Recarga{background:var(--amber-deep);}
+  .mono{font-family:var(--mono); color:var(--ink-soft); font-size:11.5px;}
+  .del-btn{
+    border:none; background:none; color:var(--red); cursor:pointer; font-size:15px;
+    padding:2px 6px; border-radius:5px;
+  }
+  .del-btn:hover{background:#fde8e9;}
+
+  .filters{display:flex; gap:8px; padding:12px 18px; border-bottom:1px solid var(--line); flex-wrap:wrap;}
+  .filters select, .filters input{width:auto; flex:1; min-width:120px; font-size:12.5px;}
+
+  .empty-state{padding:40px 20px; text-align:center; color:var(--ink-soft); font-size:13px;}
+  .toast{
+    position:fixed; bottom:22px; right:22px; background:var(--navy-deep); color:#fff;
+    padding:12px 18px; border-radius:8px; font-size:13px; box-shadow:0 8px 24px rgba(0,0,0,.2);
+    transform:translateY(120%); transition:transform .25s ease; z-index:9999; max-width:320px;
+  }
+  .toast.show{transform:translateY(0);}
+  .toast.error{background:var(--red);}
+  .toast.ok{background:var(--teal);}
+
+  .kpis{display:flex; gap:10px; padding:14px 18px 0;}
+  .kpi{
+    flex:1; background:var(--bg); border-radius:8px; padding:10px 12px; text-align:center;
+  }
+  .kpi .n{font-family:var(--mono); font-size:19px; font-weight:600; color:var(--navy);}
+  .kpi .l{font-size:10px; text-transform:uppercase; color:var(--ink-soft); letter-spacing:.04em; margin-top:2px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="bolt"><img src="data:image/png;base64,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" alt="Chilquinta" style="height:100%; width:auto; object-fit:contain; display:block;"></div>
+    <div>
+      <h1>Registro de Actividades ED</h1>
+      <p>Entregas · Retiros · Recargas de combustible — equipos de respaldo</p>
+    </div>
+  </div>
+  <div class="status-pill live" id="storage-status">conectando con SharePoint...</div>
+</header>
+
+<div class="layout">
+
+  <!-- FORM PANEL -->
+  <div class="panel">
+    <div class="panel-head"><h2>Nueva actividad</h2></div>
+    <div class="panel-body">
+
+      <div class="tabs" id="tipo-tabs">
+        <button class="tab-btn active" data-tipo="Entrega">Entrega</button>
+        <button class="tab-btn" data-tipo="Retiro">Retiro</button>
+        <button class="tab-btn" data-tipo="Recarga combustible">Recarga</button>
+      </div>
+
+      <label for="f-zona">Zona</label>
+      <select id="f-zona">
+        <option value="San Antonio">San Antonio</option>
+        <option value="Valparaíso">Valparaíso</option>
+        <option value="Costa">Costa</option>
+        <option value="Marga Marga">Marga Marga</option>
+        <option value="Quillota">Quillota</option>
+        <option value="Aconcagua">Aconcagua</option>
+      </select>
+
+      <div class="row2">
+        <div>
+          <label for="f-cliente">Cliente / N°</label>
+          <input id="f-cliente" type="text" placeholder="Ej: 4831022-5">
+        </div>
+        <div>
+          <label for="f-sap">Número SAP</label>
+          <input id="f-sap" type="text" placeholder="Ej: 1003125">
+        </div>
+      </div>
+
+      <div id="equipo-wrap">
+        <label for="f-equipo" id="lbl-equipo">Equipo</label>
+        <select id="f-equipo">
+          <option value="Generador">Generador</option>
+          <option value="Batería">Batería</option>
+        </select>
+      </div>
+
+      <div id="litros-wrap" style="display:none;">
+        <label for="f-litros">Litros recargados</label>
+        <input id="f-litros" type="number" min="0" step="0.1" placeholder="Ej: 20">
+      </div>
+
+      <div class="row2">
+        <div>
+          <label for="f-tecnico">Técnico responsable</label>
+          <input id="f-tecnico" type="text" placeholder="Nombre">
+        </div>
+        <div>
+          <label for="f-fecha">Fecha y hora</label>
+          <input id="f-fecha" type="datetime-local">
+        </div>
+      </div>
+
+      <label for="f-obs">Observaciones</label>
+      <textarea id="f-obs" placeholder="Detalles adicionales de la actividad..."></textarea>
+
+      <label>Foto de evidencia</label>
+      <div class="geo-box" style="margin-top:6px;">
+        <input type="file" id="f-foto" accept="image/*" capture="environment" style="display:none;">
+        <button type="button" class="btn-secondary" id="btn-foto" style="width:100%; margin:0;">📷 Tomar / adjuntar foto</button>
+        <div id="foto-preview-wrap" style="display:none; margin-top:10px;">
+          <img id="foto-preview" style="width:100%; border-radius:6px; display:block;">
+          <button type="button" class="manual-toggle" id="btn-foto-quitar" style="margin-top:6px; color:var(--red);">Quitar foto</button>
+        </div>
+      </div>
+
+      <div class="geo-box">
+        <span class="geo-title">Ubicación</span>
+        <div class="geo-status" id="geo-status">
+          <span class="geo-dot" id="geo-dot"></span>
+          <span id="geo-text" class="mono">sin geolocalizar</span>
+        </div>
+
+        <div class="row2" style="margin-bottom:8px;">
+          <input id="f-direccion" type="text" placeholder="Ej: Av. Errázuriz 1112, Valparaíso" style="grid-column: 1 / 2;">
+          <button class="btn-secondary" id="btn-buscar-direccion" type="button" style="margin:0; width:auto; white-space:nowrap;">🔍 Buscar</button>
+        </div>
+        <div id="direccion-resultados" style="display:none; margin-bottom:8px; max-height:160px; overflow-y:auto; border:1px solid var(--line); border-radius:7px;"></div>
+
+        <button class="manual-toggle" id="manual-toggle" type="button">Ingresar coordenadas manualmente</button>
+        <div class="row2" id="manual-coords" style="display:none; margin-top:8px;">
+          <div><input id="f-lat" type="number" step="any" placeholder="Latitud"></div>
+          <div><input id="f-lng" type="number" step="any" placeholder="Longitud"></div>
+        </div>
+      </div>
+
+      <button class="btn" id="btn-geo" type="button">📍 Obtener ubicación actual</button>
+      <button class="btn" id="btn-registrar" type="button" disabled>Registrar actividad</button>
+    </div>
+  </div>
+
+  <!-- MAP + TABLE -->
+  <div style="display:flex; flex-direction:column; gap:18px;">
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Mapa de actividades</h2>
+        <span class="mono" style="font-size:11px; color:var(--ink-soft);" id="map-count">0 registros</span>
+      </div>
+      <div id="map"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Historial</h2></div>
+      <div class="kpis">
+        <div class="kpi"><div class="n" id="kpi-entrega">0</div><div class="l">Entregas</div></div>
+        <div class="kpi"><div class="n" id="kpi-retiro">0</div><div class="l">Retiros</div></div>
+        <div class="kpi"><div class="n" id="kpi-recarga">0</div><div class="l">Recargas</div></div>
+        <div class="kpi"><div class="n" id="kpi-litros">0</div><div class="l">Litros totales</div></div>
+      </div>
+      <div class="filters">
+        <select id="filt-tipo">
+          <option value="">Todos los tipos</option>
+          <option value="Entrega">Entrega</option>
+          <option value="Retiro">Retiro</option>
+          <option value="Recarga combustible">Recarga combustible</option>
+        </select>
+        <select id="filt-zona">
+          <option value="">Todas las zonas</option>
+          <option value="San Antonio">San Antonio</option>
+          <option value="Valparaíso">Valparaíso</option>
+          <option value="Costa">Costa</option>
+          <option value="Marga Marga">Marga Marga</option>
+          <option value="Quillota">Quillota</option>
+          <option value="Aconcagua">Aconcagua</option>
+        </select>
+        <label style="display:flex; align-items:center; gap:6px; font-size:12px; text-transform:none; letter-spacing:0; font-weight:500; margin:0; white-space:nowrap;">
+          <input type="checkbox" id="filt-ultimo-cliente" checked style="width:auto;">
+          Solo última actividad por cliente
+        </label>
+        <button class="btn-secondary" id="btn-export" style="width:auto; margin:0; padding:8px 14px; font-size:12px;">⤓ Exportar CSV</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Tipo</th><th>Zona</th><th>Cliente</th><th>N° SAP</th><th>Equipo</th><th>Litros</th>
+              <th>Técnico</th><th>Fecha</th><th>Dirección</th><th>Coordenadas</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+        <div class="empty-state" id="empty-state">Aún no hay actividades registradas.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// Endpoints de Power Automate conectados a SharePoint (lista RegistroActividadesED)
+const FLOW_WRITE_URL = 'https://default5f8f1b315fca45ff958cf12d692003.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/25/workflows/3a137abdcd5546c88360bd03270ca075/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=dLUwe2TCMa3xAioAuR6izlew2SKZHEJIjpB3TLkDcoA';
+const FLOW_READ_URL  = 'https://default5f8f1b315fca45ff958cf12d692003.14.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/21/workflows/82c47590d0334d07ad7a11aa50dab05f/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=Kn3_9sUR3VG_2xvOkvx7FkBYhjn7P9S_u46-ngpmGxo';
+
+let records = [];
+let currentTipo = 'Entrega';
+let currentCoords = null;
+let currentDireccion = '';
+let currentPhoto = null; // { base64, filename, mimeType }
+let map, markersLayer;
+
+const COLORS = { 'Entrega': '#2e9e5b', 'Retiro': '#d64550', 'Recarga combustible': '#f5a623' };
+
+function initMap(){
+  map = L.map('map', { scrollWheelZoom: true }).setView([-33.05, -71.55], 9);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(map);
+  markersLayer = L.layerGroup().addTo(map);
+}
+
+function showToast(msg, type){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' ' + type : '');
+  setTimeout(()=> t.classList.remove('show'), 3200);
+}
+
+// ---- Foto de evidencia ----
+document.getElementById('btn-foto').addEventListener('click', ()=>{
+  document.getElementById('f-foto').click();
+});
+document.getElementById('f-foto').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  if(file.size > 4 * 1024 * 1024){
+    showToast('La foto es muy pesada (máx. 4 MB). Prueba con otra o reduce la calidad.', 'error');
+    e.target.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    const dataUrl = reader.result; // "data:image/jpeg;base64,...."
+    const [meta, base64] = dataUrl.split(',');
+    const mimeType = meta.match(/data:(.*);base64/)[1];
+    currentPhoto = { base64, filename: file.name || ('evidencia_' + Date.now() + '.jpg'), mimeType };
+    document.getElementById('foto-preview').src = dataUrl;
+    document.getElementById('foto-preview-wrap').style.display = 'block';
+    document.getElementById('btn-foto').textContent = '📷 Cambiar foto';
+  };
+  reader.readAsDataURL(file);
+});
+document.getElementById('btn-foto-quitar').addEventListener('click', ()=>{
+  currentPhoto = null;
+  document.getElementById('f-foto').value = '';
+  document.getElementById('foto-preview-wrap').style.display = 'none';
+  document.getElementById('btn-foto').textContent = '📷 Tomar / adjuntar foto';
+});
+
+// ---- Tabs (tipo actividad) ----
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentTipo = btn.dataset.tipo;
+    const litrosWrap = document.getElementById('litros-wrap');
+    const equipoWrap = document.getElementById('f-equipo').parentElement;
+    if(currentTipo === 'Recarga combustible'){
+      litrosWrap.style.display = 'block';
+      equipoWrap.style.display = 'none';
+    } else {
+      litrosWrap.style.display = 'none';
+      equipoWrap.style.display = 'block';
+    }
+  });
+});
+
+// ---- Búsqueda por dirección (geocodificación) ----
+document.getElementById('btn-buscar-direccion').addEventListener('click', buscarDireccion);
+document.getElementById('f-direccion').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter'){ e.preventDefault(); buscarDireccion(); }
+});
+
+async function buscarDireccion(){
+  const query = document.getElementById('f-direccion').value.trim();
+  const resultsBox = document.getElementById('direccion-resultados');
+  if(!query){
+    showToast('Escribe una dirección para buscar.', 'error');
+    return;
+  }
+  const btn = document.getElementById('btn-buscar-direccion');
+  btn.disabled = true; btn.textContent = 'Buscando...';
+  setGeoStatus('pending', 'buscando dirección...');
+  try{
+    // Sesgo hacia la región de Valparaíso; limitado a Chile
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=6'
+      + '&countrycodes=cl&viewbox=-71.9,-32.6,-70.9,-33.9&bounded=0'
+      + '&q=' + encodeURIComponent(query);
+    const res = await fetch(url, { headers: { 'Accept-Language': 'es' } });
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    resultsBox.innerHTML = '';
+    if(!data.length){
+      setGeoStatus('err', 'no se encontraron resultados — prueba con más detalle');
+      resultsBox.style.display = 'none';
+      showToast('No se encontró esa dirección. Intenta agregar comuna o número.', 'error');
+      return;
+    }
+    data.forEach(place=>{
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'direccion-item';
+      item.textContent = place.display_name;
+      item.addEventListener('click', ()=>{
+        currentCoords = { lat: parseFloat(place.lat), lng: parseFloat(place.lon), source: 'direccion' };
+        currentDireccion = place.display_name;
+        setGeoStatus('ok', `${currentCoords.lat.toFixed(5)}, ${currentCoords.lng.toFixed(5)} (por dirección)`);
+        document.getElementById('btn-registrar').disabled = false;
+        resultsBox.style.display = 'none';
+        resultsBox.innerHTML = '';
+        document.getElementById('f-direccion').value = place.display_name;
+      });
+      resultsBox.appendChild(item);
+    });
+    resultsBox.style.display = 'block';
+    setGeoStatus('', `${data.length} resultado(s) — selecciona el correcto`);
+  }catch(e){
+    console.error(e);
+    setGeoStatus('err', 'error al buscar dirección');
+    showToast('No se pudo buscar la dirección. Revisa tu conexión e intenta de nuevo.', 'error');
+  }finally{
+    btn.disabled = false; btn.textContent = '🔍 Buscar';
+  }
+}
+
+// ---- Manual coordinates toggle ----
+document.getElementById('manual-toggle').addEventListener('click', ()=>{
+  const box = document.getElementById('manual-coords');
+  box.style.display = box.style.display === 'none' ? 'grid' : 'none';
+});
+document.getElementById('f-lat').addEventListener('input', syncManualCoords);
+document.getElementById('f-lng').addEventListener('input', syncManualCoords);
+function syncManualCoords(){
+  const lat = parseFloat(document.getElementById('f-lat').value);
+  const lng = parseFloat(document.getElementById('f-lng').value);
+  if(!isNaN(lat) && !isNaN(lng)){
+    currentCoords = { lat, lng, source: 'manual' };
+    setGeoStatus('ok', `${lat.toFixed(5)}, ${lng.toFixed(5)} (manual)`);
+    document.getElementById('btn-registrar').disabled = false;
+  }
+}
+
+function setGeoStatus(state, text){
+  const dot = document.getElementById('geo-dot');
+  dot.className = 'geo-dot ' + state;
+  document.getElementById('geo-text').textContent = text;
+}
+
+// ---- Geolocation ----
+document.getElementById('btn-geo').addEventListener('click', ()=>{
+  if(!navigator.geolocation){
+    setGeoStatus('err', 'geolocalización no disponible en este navegador');
+    showToast('Este navegador no soporta geolocalización. Ingresa coordenadas manualmente.', 'error');
+    return;
+  }
+  setGeoStatus('pending', 'obteniendo ubicación...');
+  navigator.geolocation.getCurrentPosition(
+    (pos)=>{
+      currentCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude, source: 'gps' };
+      setGeoStatus('ok', `${currentCoords.lat.toFixed(5)}, ${currentCoords.lng.toFixed(5)} (±${Math.round(pos.coords.accuracy)} m)`);
+      document.getElementById('btn-registrar').disabled = false;
+    },
+    (err)=>{
+      setGeoStatus('err', 'no se pudo obtener ubicación — usa coordenadas manuales');
+      showToast('No se pudo acceder a la ubicación. Puedes ingresarla manualmente.', 'error');
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+});
+
+// ---- Register activity ----
+document.getElementById('btn-registrar').addEventListener('click', async ()=>{
+  if(!currentCoords){
+    showToast('Primero obtén o ingresa la ubicación.', 'error');
+    return;
+  }
+  const zona = document.getElementById('f-zona').value;
+  const cliente = document.getElementById('f-cliente').value.trim();
+  const equipo = currentTipo === 'Recarga combustible' ? 'Generador' : document.getElementById('f-equipo').value;
+  const litros = currentTipo === 'Recarga combustible' ? (document.getElementById('f-litros').value || '0') : '';
+  const tecnico = document.getElementById('f-tecnico').value.trim();
+  const fechaInput = document.getElementById('f-fecha').value;
+  const fecha = fechaInput ? new Date(fechaInput) : new Date();
+  const obs = document.getElementById('f-obs').value.trim();
+
+  if(!cliente || !tecnico){
+    showToast('Completa cliente y técnico responsable.', 'error');
+    return;
+  }
+
+  const payload = {
+    tipo: currentTipo,
+    zona, cliente, equipo, litros, tecnico,
+    fecha: fecha.toISOString(),
+    lat: currentCoords.lat, lng: currentCoords.lng,
+    obs,
+    sap: document.getElementById('f-sap').value.trim(),
+    direccion: document.getElementById('f-direccion').value.trim(),
+    fotoBase64: currentPhoto ? currentPhoto.base64 : '',
+    fotoNombre: currentPhoto ? currentPhoto.filename : '',
+    fotoMime: currentPhoto ? currentPhoto.mimeType : ''
+  };
+
+  const btn = document.getElementById('btn-registrar');
+  btn.disabled = true; btn.textContent = 'Guardando en SharePoint...';
+  try {
+    const res = await fetch(FLOW_WRITE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    resetForm();
+    showToast('Actividad registrada y geolocalizada en SharePoint.', 'ok');
+    await loadRecords();
+  } catch(e){
+    showToast('Error al guardar en SharePoint. Revisa el flujo o tu conexión.', 'error');
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Registrar actividad';
+  }
+});
+
+function resetForm(){
+  document.getElementById('f-cliente').value = '';
+  document.getElementById('f-sap').value = '';
+  document.getElementById('f-litros').value = '';
+  document.getElementById('f-tecnico').value = '';
+  document.getElementById('f-fecha').value = '';
+  document.getElementById('f-obs').value = '';
+  document.getElementById('f-lat').value = '';
+  document.getElementById('f-lng').value = '';
+  document.getElementById('f-direccion').value = '';
+  document.getElementById('direccion-resultados').style.display = 'none';
+  document.getElementById('direccion-resultados').innerHTML = '';
+  currentCoords = null;
+  currentPhoto = null;
+  document.getElementById('f-foto').value = '';
+  document.getElementById('foto-preview-wrap').style.display = 'none';
+  document.getElementById('btn-foto').textContent = '📷 Tomar / adjuntar foto';
+  setGeoStatus('', 'sin geolocalizar');
+  document.getElementById('btn-registrar').disabled = true;
+}
+
+// ---- Delete ----
+// Nota: aún no existe un flujo de Power Automate para eliminar elementos de SharePoint.
+// Por ahora, la eliminación se hace directamente en la lista RegistroActividadesED.
+function deleteRecord(id){
+  showToast('Para eliminar un registro, hazlo directamente en la lista de SharePoint (RegistroActividadesED).', 'error');
+}
+window.deleteRecord = deleteRecord;
+
+// ---- Rendering ----
+function badgeClass(tipo){
+  if(tipo === 'Entrega') return 'Entrega';
+  if(tipo === 'Retiro') return 'Retiro';
+  return 'Recarga';
+}
+
+function getLatestPerClient(list){
+  const map = new Map();
+  list.forEach(r=>{
+    const key = (r.cliente || '').trim().toLowerCase();
+    const existing = map.get(key);
+    if(!existing || new Date(r.fecha) > new Date(existing.fecha)){
+      map.set(key, r);
+    }
+  });
+  return Array.from(map.values());
+}
+
+function getFilteredRecords(){
+  const filtTipo = document.getElementById('filt-tipo').value;
+  const filtZona = document.getElementById('filt-zona').value;
+  const soloUltimo = document.getElementById('filt-ultimo-cliente').checked;
+  let list = records
+    .filter(r => !filtTipo || r.tipo === filtTipo)
+    .filter(r => !filtZona || r.zona === filtZona);
+  if(soloUltimo){
+    list = getLatestPerClient(list);
+  }
+  return list.sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
+}
+
+function renderTable(){
+  const tbody = document.getElementById('tbody');
+  const empty = document.getElementById('empty-state');
+
+  let filtered = getFilteredRecords();
+
+  tbody.innerHTML = '';
+  empty.style.display = filtered.length ? 'none' : 'block';
+
+  filtered.forEach(r=>{
+    const tr = document.createElement('tr');
+    const fechaFmt = new Date(r.fecha).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' });
+    tr.innerHTML = `
+      <td><span class="badge ${badgeClass(r.tipo)}">${r.tipo === 'Recarga combustible' ? 'Recarga' : r.tipo}</span></td>
+      <td>${r.zona}</td>
+      <td>${r.cliente}</td>
+      <td class="mono">${r.sap || '—'}</td>
+      <td>${r.equipo}</td>
+      <td>${r.litros ? r.litros + ' L' : '—'}</td>
+      <td>${r.tecnico}</td>
+      <td class="mono">${fechaFmt}</td>
+      <td style="white-space:normal; max-width:220px;">${r.direccion || '—'}</td>
+      <td class="mono">${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}</td>
+      <td><button class="del-btn" onclick="deleteRecord('${r.id}')" title="Eliminar">✕</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderMap(){
+  markersLayer.clearLayers();
+  const filtered = getFilteredRecords();
+  filtered.forEach(r=>{
+    const color = COLORS[r.tipo] || '#0f2a47';
+    const marker = L.circleMarker([r.lat, r.lng], {
+      radius: 7, color: '#fff', weight: 2, fillColor: color, fillOpacity: 0.95
+    });
+    const fechaFmt = new Date(r.fecha).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' });
+    marker.bindPopup(`
+      <div style="font-family:'IBM Plex Sans',sans-serif; font-size:12.5px; line-height:1.5;">
+        <strong>${r.tipo}</strong> — ${r.zona}<br>
+        Cliente: ${r.cliente}<br>
+        ${r.sap ? 'N° SAP: ' + r.sap + '<br>' : ''}
+        ${r.direccion ? 'Dirección: ' + r.direccion + '<br>' : ''}
+        ${r.equipo !== '—' ? 'Equipo: ' + r.equipo + '<br>' : ''}
+        ${r.litros ? 'Litros: ' + r.litros + ' L<br>' : ''}
+        Técnico: ${r.tecnico}<br>
+        <span style="color:#5c6b7a;">${fechaFmt}</span>
+      </div>
+    `);
+    marker.addTo(markersLayer);
+  });
+  document.getElementById('map-count').textContent = filtered.length + ' registros';
+}
+
+function renderKpis(){
+  const entregas = records.filter(r=>r.tipo==='Entrega').length;
+  const retiros = records.filter(r=>r.tipo==='Retiro').length;
+  const recargas = records.filter(r=>r.tipo==='Recarga combustible').length;
+  const litros = records.reduce((sum,r)=> sum + (parseFloat(r.litros)||0), 0);
+  document.getElementById('kpi-entrega').textContent = entregas;
+  document.getElementById('kpi-retiro').textContent = retiros;
+  document.getElementById('kpi-recarga').textContent = recargas;
+  document.getElementById('kpi-litros').textContent = litros.toFixed(1);
+}
+
+function renderAll(){
+  renderTable();
+  renderMap();
+  renderKpis();
+}
+
+document.getElementById('filt-tipo').addEventListener('change', ()=>{ renderTable(); renderMap(); });
+document.getElementById('filt-zona').addEventListener('change', ()=>{ renderTable(); renderMap(); });
+document.getElementById('filt-ultimo-cliente').addEventListener('change', ()=>{ renderTable(); renderMap(); });
+
+// ---- CSV export ----
+document.getElementById('btn-export').addEventListener('click', ()=>{
+  if(!records.length){ showToast('No hay registros para exportar.', 'error'); return; }
+  const headers = ['Tipo','Zona','Cliente','Equipo','Litros','Tecnico','Fecha','Latitud','Longitud','Observaciones'];
+  const rows = records.map(r => [
+    r.tipo, r.zona, r.cliente, r.equipo, r.litros, r.tecnico,
+    new Date(r.fecha).toLocaleString('es-CL'), r.lat, r.lng, (r.obs||'').replace(/[\n\r,]/g,' ')
+  ]);
+  const csv = [headers, ...rows].map(row => row.map(v => `"${v}"`).join(',')).join('\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `actividades_ED_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+// ---- Load data from SharePoint (vía Power Automate) ----
+async function loadRecords(){
+  const statusEl = document.getElementById('storage-status');
+  try{
+    const res = await fetch(FLOW_READ_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const items = await res.json();
+    console.log('DEBUG — respuesta cruda del flujo:', items);
+    console.log('DEBUG — es array:', Array.isArray(items), '— cantidad:', items?.length);
+    records = (Array.isArray(items) ? items : []).map(item => ({
+      id: item.id ?? item.Id ?? item.ID,
+      tipo: item.tipo ?? '',
+      zona: item.zona ?? '',
+      cliente: item.cliente ?? '',
+      equipo: item.equipo ?? '—',
+      litros: item.litros ?? '',
+      tecnico: item.tecnico ?? '',
+      fecha: item.fecha ?? new Date().toISOString(),
+      sap: item.sap ?? '',
+      direccion: item.direccion ?? '',
+      lat: parseFloat(item.lat),
+      lng: parseFloat(item.lng),
+      obs: item.obs ?? ''
+    })).filter(r => !isNaN(r.lat) && !isNaN(r.lng));
+    statusEl.textContent = 'conectado a SharePoint · ' + records.length + ' registros';
+  }catch(e){
+    console.error('Error cargando registros desde SharePoint', e);
+    statusEl.textContent = 'error al conectar con SharePoint';
+    showToast('No se pudo cargar el historial desde SharePoint.', 'error');
+  }
+  renderAll();
+}
+
+initMap();
+loadRecords();
+</script>
+</body>
+</html>
