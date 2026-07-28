@@ -211,6 +211,9 @@
   <div style="display:flex; align-items:center; gap:10px;">
     <button id="btn-toggle-estado" style="font-family:var(--mono); font-size:11.5px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); padding:6px 12px; border-radius:20px; color:#e8eef4; cursor:pointer;">📦 Estado de equipos</button>
     <div class="status-pill live" id="storage-status">conectando con SharePoint...</div>
+    <button id="btn-refrescar" style="font-family:var(--sans); font-size:12px; font-weight:600; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.25); padding:7px 14px; border-radius:20px; color:#fff; cursor:pointer; display:flex; align-items:center; gap:6px; white-space:nowrap;">
+      <span id="icono-refrescar" style="display:inline-block; transition:transform .5s;">🔄</span> Actualizar
+    </button>
   </div>
 </header>
 
@@ -1019,7 +1022,7 @@ async function loadRecords(){
       lng: parseFloat(item.lng),
       obs: item.obs ?? ''
     })).filter(r => !isNaN(r.lat) && !isNaN(r.lng));
-    statusEl.textContent = 'conectado a SharePoint · ' + records.length + ' registros';
+    statusEl.textContent = 'Actualizado ' + new Date().toLocaleTimeString('es-CL', { hour: 'numeric', minute: '2-digit' }) + ' · ' + records.length + ' registros';
   }catch(e){
     console.error('Error cargando registros desde SharePoint', e);
     statusEl.textContent = 'error al conectar con SharePoint';
@@ -1033,6 +1036,25 @@ async function loadRecords(){
 
 initMap();
 loadRecords();
+
+// ---- Botón de actualización manual ----
+document.getElementById('btn-refrescar').addEventListener('click', async ()=>{
+  const icono = document.getElementById('icono-refrescar');
+  const btn = document.getElementById('btn-refrescar');
+  btn.disabled = true;
+  icono.style.transform = 'rotate(360deg)';
+  await loadRecords();
+  showToast('Datos actualizados desde SharePoint.', 'ok');
+  setTimeout(()=>{ icono.style.transform = 'rotate(0deg)'; btn.disabled = false; }, 500);
+});
+
+// ---- Auto-actualización en segundo plano ----
+setInterval(()=>{
+  // Evita interrumpir si el usuario está justo en medio de un registro
+  const btn = document.getElementById('btn-registrar');
+  if(btn && btn.textContent.includes('Guardando')) return;
+  loadRecords();
+}, 60000); // cada 60 segundos
 </script>
 </body>
 </html>
