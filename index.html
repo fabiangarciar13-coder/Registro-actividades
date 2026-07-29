@@ -277,14 +277,11 @@
       <label for="f-obs">Observaciones</label>
       <textarea id="f-obs" placeholder="Detalles adicionales de la actividad..."></textarea>
 
-      <label>Foto de evidencia</label>
+      <label>Fotos de evidencia (máx. 3)</label>
       <div class="geo-box" style="margin-top:6px;">
         <input type="file" id="f-foto" accept="image/*" capture="environment" style="display:none;">
-        <button type="button" class="btn-secondary" id="btn-foto" style="width:100%; margin:0;">📷 Tomar / adjuntar foto</button>
-        <div id="foto-preview-wrap" style="display:none; margin-top:10px;">
-          <img id="foto-preview" style="width:100%; border-radius:6px; display:block;">
-          <button type="button" class="manual-toggle" id="btn-foto-quitar" style="margin-top:6px; color:var(--red);">Quitar foto</button>
-        </div>
+        <button type="button" class="btn-secondary" id="btn-foto" style="width:100%; margin:0;">📷 Agregar foto (0/3)</button>
+        <div id="fotos-preview-wrap" style="display:none; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:10px;"></div>
       </div>
 
       <div class="geo-box">
@@ -419,7 +416,7 @@ let records = [];
 let currentTipo = 'Entrega';
 let currentCoords = null;
 let currentDireccion = '';
-let currentPhoto = null; // { base64, filename, mimeType }
+let currentPhotos = []; // hasta 3: [{ base64, filename, mimeType }]
 let map, markersLayer;
 
 const COLORS = { 'Entrega': '#2e9e5b', 'Retiro': '#da291c', 'Recarga combustible': '#f5a623' };
@@ -440,13 +437,23 @@ function showToast(msg, type){
   setTimeout(()=> t.classList.remove('show'), 3200);
 }
 
-// ---- Foto de evidencia ----
+// ---- Foto de evidencia (hasta 3) ----
 document.getElementById('btn-foto').addEventListener('click', ()=>{
+  if(currentPhotos.length >= 3){
+    showToast('Ya tienes 3 fotos. Quita una para agregar otra.', 'error');
+    return;
+  }
   document.getElementById('f-foto').click();
 });
+
 document.getElementById('f-foto').addEventListener('change', (e)=>{
   const file = e.target.files[0];
   if(!file) return;
+  if(currentPhotos.length >= 3){
+    showToast('Máximo 3 fotos por actividad.', 'error');
+    e.target.value = '';
+    return;
+  }
   if(file.size > 4 * 1024 * 1024){
     showToast('La foto es muy pesada (máx. 4 MB). Prueba con otra o reduce la calidad.', 'error');
     e.target.value = '';
@@ -454,22 +461,38 @@ document.getElementById('f-foto').addEventListener('change', (e)=>{
   }
   const reader = new FileReader();
   reader.onload = ()=>{
-    const dataUrl = reader.result; // "data:image/jpeg;base64,...."
+    const dataUrl = reader.result;
     const [meta, base64] = dataUrl.split(',');
     const mimeType = meta.match(/data:(.*);base64/)[1];
-    currentPhoto = { base64, filename: file.name || ('evidencia_' + Date.now() + '.jpg'), mimeType };
-    document.getElementById('foto-preview').src = dataUrl;
-    document.getElementById('foto-preview-wrap').style.display = 'block';
-    document.getElementById('btn-foto').textContent = '📷 Cambiar foto';
+    currentPhotos.push({ base64, filename: file.name || ('evidencia_' + Date.now() + '.jpg'), mimeType, dataUrl });
+    renderFotosPreview();
+    e.target.value = '';
   };
   reader.readAsDataURL(file);
 });
-document.getElementById('btn-foto-quitar').addEventListener('click', ()=>{
-  currentPhoto = null;
-  document.getElementById('f-foto').value = '';
-  document.getElementById('foto-preview-wrap').style.display = 'none';
-  document.getElementById('btn-foto').textContent = '📷 Tomar / adjuntar foto';
-});
+
+function renderFotosPreview(){
+  const wrap = document.getElementById('fotos-preview-wrap');
+  const btn = document.getElementById('btn-foto');
+  wrap.innerHTML = '';
+  wrap.style.display = currentPhotos.length ? 'grid' : 'none';
+  currentPhotos.forEach((foto, i)=>{
+    const box = document.createElement('div');
+    box.style.cssText = 'position:relative; border-radius:6px; overflow:hidden; aspect-ratio:1;';
+    box.innerHTML = `
+      <img src="${foto.dataUrl}" style="width:100%; height:100%; object-fit:cover; display:block;">
+      <button type="button" data-i="${i}" class="quitar-foto-btn" style="position:absolute; top:3px; right:3px; width:20px; height:20px; border-radius:50%; border:none; background:rgba(218,41,28,.9); color:#fff; font-size:12px; cursor:pointer; line-height:1;">✕</button>
+    `;
+    wrap.appendChild(box);
+  });
+  wrap.querySelectorAll('.quitar-foto-btn').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      currentPhotos.splice(parseInt(b.dataset.i), 1);
+      renderFotosPreview();
+    });
+  });
+  btn.textContent = `📷 Agregar foto (${currentPhotos.length}/3)`;
+}
 
 // ---- Cargar lista de números SAP válidos ----
 async function cargarListaSap(){
@@ -633,6 +656,7 @@ document.getElementById('btn-geo').addEventListener('click', ()=>{
       currentCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude, source: 'gps' };
       setGeoStatus('ok', `${currentCoords.lat.toFixed(5)}, ${currentCoords.lng.toFixed(5)} (±${Math.round(pos.coords.accuracy)} m)`);
       document.getElementById('btn-registrar').disabled = false;
+      buscarDireccionInversa(currentCoords.lat, currentCoords.lng);
     },
     (err)=>{
       setGeoStatus('err', 'no se pudo obtener ubicación — usa coordenadas manuales');
@@ -641,6 +665,28 @@ document.getElementById('btn-geo').addEventListener('click', ()=>{
     { enableHighAccuracy: true, timeout: 10000 }
   );
 });
+
+// ---- Geocodificación inversa: coordenadas → texto de dirección ----
+async function buscarDireccionInversa(lat, lng){
+  const campoDireccion = document.getElementById('f-direccion');
+  const previo = campoDireccion.value;
+  campoDireccion.placeholder = 'Buscando dirección...';
+  try{
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1&zoom=18`;
+    const res = await fetch(url, { headers: { 'Accept-Language': 'es' } });
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if(data && data.display_name){
+      campoDireccion.value = data.display_name;
+    }
+  }catch(e){
+    console.error('Error en geocodificación inversa', e);
+    // No bloquea el registro: la actividad igual se guarda con coordenadas, solo sin texto de dirección.
+    if(!previo) campoDireccion.value = '';
+  }finally{
+    campoDireccion.placeholder = 'Ej: Av. Errázuriz 1112, Valparaíso';
+  }
+}
 
 // ---- Register activity ----
 document.getElementById('btn-registrar').addEventListener('click', async ()=>{
@@ -700,9 +746,15 @@ document.getElementById('btn-registrar').addEventListener('click', async ()=>{
     obs,
     sap: document.getElementById('f-sap').value.trim(),
     direccion: document.getElementById('f-direccion').value.trim(),
-    fotoBase64: currentPhoto ? currentPhoto.base64 : '',
-    fotoNombre: currentPhoto ? currentPhoto.filename : '',
-    fotoMime: currentPhoto ? currentPhoto.mimeType : ''
+    foto1Base64: currentPhotos[0] ? currentPhotos[0].base64 : '',
+    foto1Nombre: currentPhotos[0] ? currentPhotos[0].filename : '',
+    foto1Mime: currentPhotos[0] ? currentPhotos[0].mimeType : '',
+    foto2Base64: currentPhotos[1] ? currentPhotos[1].base64 : '',
+    foto2Nombre: currentPhotos[1] ? currentPhotos[1].filename : '',
+    foto2Mime: currentPhotos[1] ? currentPhotos[1].mimeType : '',
+    foto3Base64: currentPhotos[2] ? currentPhotos[2].base64 : '',
+    foto3Nombre: currentPhotos[2] ? currentPhotos[2].filename : '',
+    foto3Mime: currentPhotos[2] ? currentPhotos[2].mimeType : ''
   };
 
   const btn = document.getElementById('btn-registrar');
@@ -740,10 +792,9 @@ function resetForm(){
   document.getElementById('direccion-resultados').style.display = 'none';
   document.getElementById('direccion-resultados').innerHTML = '';
   currentCoords = null;
-  currentPhoto = null;
+  currentPhotos = [];
   document.getElementById('f-foto').value = '';
-  document.getElementById('foto-preview-wrap').style.display = 'none';
-  document.getElementById('btn-foto').textContent = '📷 Tomar / adjuntar foto';
+  renderFotosPreview();
   setGeoStatus('', 'sin geolocalizar');
   document.getElementById('btn-registrar').disabled = true;
 }
