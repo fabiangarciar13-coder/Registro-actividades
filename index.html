@@ -1087,7 +1087,7 @@ function renderEstadoEquipos(){
 
   filas.forEach(f=>{
     const tr = document.createElement('tr');
-    const badgeColor = f.estado === 'En terreno' ? 'var(--green)' : (f.estado === 'Disponible' ? 'var(--teal)' : '#aeb8c2');
+    const badgeColor = f.estado === 'En terreno' ? 'var(--green)' : (f.estado === 'Disponible' ? '#2f6fed' : '#aeb8c2');
     const fechaFmt = f.fecha ? new Date(f.fecha).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' }) : '—';
     tr.innerHTML = `
       <td class="mono">${f.sap}</td>
@@ -1186,14 +1186,32 @@ initMap();
 loadRecords();
 
 // ---- Botón de actualización manual ----
-document.getElementById('btn-refrescar').addEventListener('click', async ()=>{
+document.getElementById('btn-refrescar').addEventListener('click', ()=>{
+  const hayDatosSinGuardar = [
+    document.getElementById('f-cliente').value,
+    document.getElementById('f-sap').value,
+    document.getElementById('f-tecnico').value,
+    document.getElementById('f-obs').value,
+    document.getElementById('f-rut').value,
+    document.getElementById('f-po').value,
+    document.getElementById('f-serie').value
+  ].some(v => v.trim() !== '') || currentCoords !== null || currentPhotos.length > 0;
+
+  if(hayDatosSinGuardar && !confirm('Tienes datos sin guardar en el formulario. Si actualizas ahora, se van a perder. ¿Continuar de todas formas?')){
+    return;
+  }
+
   const icono = document.getElementById('icono-refrescar');
   const btn = document.getElementById('btn-refrescar');
   btn.disabled = true;
   icono.style.transform = 'rotate(360deg)';
-  await loadRecords();
-  showToast('Datos actualizados desde SharePoint.', 'ok');
-  setTimeout(()=>{ icono.style.transform = 'rotate(0deg)'; btn.disabled = false; }, 500);
+  // Recarga completa de la página con parámetro anti-caché: fuerza traer de nuevo
+  // el HTML/JS y todos los datos desde cero, sin depender de ninguna copia en caché.
+  setTimeout(()=>{
+    const url = new URL(window.location.href);
+    url.searchParams.set('_', Date.now());
+    window.location.href = url.toString();
+  }, 200);
 });
 
 // ---- Auto-actualización en segundo plano ----
@@ -1204,12 +1222,12 @@ setInterval(()=>{
   loadRecords();
 }, 60000); // cada 60 segundos
 
-// Refresca la planilla de equipos/SAP cada 5 minutos (cambia con menos frecuencia que las actividades)
+// Refresca la planilla de equipos/SAP cada 60 segundos
 setInterval(()=>{
   const btn = document.getElementById('btn-registrar');
   if(btn && btn.textContent.includes('Guardando')) return;
   cargarListaSap();
-}, 300000); // cada 5 minutos
+}, 60000); // cada 60 segundos
 </script>
 </body>
 </html>
