@@ -264,12 +264,12 @@
           <input id="f-serie" type="text" placeholder="Ej: SN-88213">
         </div>
         <div>
-          <label for="f-po">Orden PO *</label>
+          <label for="f-po">Orden PO</label>
           <input id="f-po" type="text" placeholder="Ej: PO-4521">
         </div>
       </div>
 
-      <label for="f-rut">RUT del cliente *</label>
+      <label for="f-rut">RUT del cliente</label>
       <input id="f-rut" type="text" placeholder="Ej: 12.345.678-9">
 
       <div id="litros-wrap" style="display:none;">
@@ -320,7 +320,7 @@
 
       <button class="btn" id="btn-geo" type="button">📍 Obtener ubicación actual</button>
       <button class="btn" id="btn-registrar" type="button" disabled>Registrar actividad</button>
-      <p class="mono" style="font-size:10.5px; color:var(--ink-soft); margin:8px 0 0; text-align:center;">* Campos obligatorios (N° de serie y fotos son opcionales)</p>
+      <p class="mono" style="font-size:10.5px; color:var(--ink-soft); margin:8px 0 0; text-align:center;">* Campos obligatorios (N° de serie, RUT, Orden PO y fotos son opcionales)</p>
     </div>
   </div>
 
@@ -771,9 +771,7 @@ document.getElementById('btn-registrar').addEventListener('click', async ()=>{
   const obs = document.getElementById('f-obs').value.trim();
 
   if(!cliente){ showToast('El campo Cliente / N° es obligatorio.', 'error'); return; }
-  if(!rut){ showToast('El campo RUT del cliente es obligatorio.', 'error'); return; }
   if(!direccionValue){ showToast('El campo Dirección es obligatorio. Búscala o ingresa coordenadas y espera a que se complete.', 'error'); return; }
-  if(!poValue){ showToast('El campo Orden PO es obligatorio.', 'error'); return; }
   if(!tecnico){ showToast('El campo Técnico responsable es obligatorio.', 'error'); return; }
   if(!fechaInput){ showToast('El campo Fecha y hora es obligatorio.', 'error'); return; }
   if(!obs){ showToast('El campo Observaciones es obligatorio.', 'error'); return; }
@@ -800,7 +798,7 @@ document.getElementById('btn-registrar').addEventListener('click', async ()=>{
     btnTemp.disabled = false;
     btnTemp.textContent = textoOriginalBtn;
   }
-  if(listaSapVigente){
+  if(listaSapVigente && sapValue){
     const listaActiva = getListaSapActiva();
     if(!listaActiva.has(sapValue)){
       const mensaje = currentTipo === 'Recarga combustible'
@@ -1202,6 +1200,13 @@ setInterval(()=>{
   if(btn && btn.textContent.includes('Guardando')) return;
   loadRecords();
 }, 60000); // cada 60 segundos
+
+// Refresca la planilla de equipos/SAP cada 5 minutos (cambia con menos frecuencia que las actividades)
+setInterval(()=>{
+  const btn = document.getElementById('btn-registrar');
+  if(btn && btn.textContent.includes('Guardando')) return;
+  cargarListaSap();
+}, 300000); // cada 5 minutos
 </script>
 </body>
 </html>
