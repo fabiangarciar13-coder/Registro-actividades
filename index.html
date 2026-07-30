@@ -242,11 +242,11 @@
 
       <div class="row2">
         <div>
-          <label for="f-cliente">Cliente / N°</label>
+          <label for="f-cliente">Cliente / N° *</label>
           <input id="f-cliente" type="text" placeholder="Ej: 4831022-5">
         </div>
         <div>
-          <label for="f-sap">Número SAP</label>
+          <label for="f-sap">Número SAP *</label>
           <input id="f-sap" type="text" placeholder="Ej: 1003125" list="sap-datalist" autocomplete="off">
           <datalist id="sap-datalist"></datalist>
           <span id="sap-status" class="mono" style="font-size:10.5px; color:var(--ink-soft); display:block; margin-top:3px;"></span>
@@ -258,23 +258,37 @@
         <input id="f-equipo-display" type="text" readonly placeholder="Se completa al ingresar un N° SAP válido" style="background:var(--bg); color:var(--ink-soft); cursor:not-allowed;">
       </div>
 
+      <div class="row2">
+        <div>
+          <label for="f-serie">N° de serie</label>
+          <input id="f-serie" type="text" placeholder="Ej: SN-88213">
+        </div>
+        <div>
+          <label for="f-po">Orden PO *</label>
+          <input id="f-po" type="text" placeholder="Ej: PO-4521">
+        </div>
+      </div>
+
+      <label for="f-rut">RUT del cliente *</label>
+      <input id="f-rut" type="text" placeholder="Ej: 12.345.678-9">
+
       <div id="litros-wrap" style="display:none;">
-        <label for="f-litros">Litros recargados</label>
+        <label for="f-litros">Litros recargados *</label>
         <input id="f-litros" type="number" min="0" step="0.1" placeholder="Ej: 20">
       </div>
 
       <div class="row2">
         <div>
-          <label for="f-tecnico">Técnico responsable</label>
+          <label for="f-tecnico">Técnico responsable *</label>
           <input id="f-tecnico" type="text" placeholder="Nombre">
         </div>
         <div>
-          <label for="f-fecha">Fecha y hora</label>
+          <label for="f-fecha">Fecha y hora *</label>
           <input id="f-fecha" type="datetime-local">
         </div>
       </div>
 
-      <label for="f-obs">Observaciones</label>
+      <label for="f-obs">Observaciones *</label>
       <textarea id="f-obs" placeholder="Detalles adicionales de la actividad..."></textarea>
 
       <label>Fotos de evidencia (máx. 3)</label>
@@ -292,7 +306,7 @@
         </div>
 
         <div class="row2" style="margin-bottom:8px;">
-          <input id="f-direccion" type="text" placeholder="Ej: Av. Errázuriz 1112, Valparaíso" style="grid-column: 1 / 2;">
+          <input id="f-direccion" type="text" placeholder="Dirección * — Ej: Av. Errázuriz 1112, Valparaíso" style="grid-column: 1 / 2;">
           <button class="btn-secondary" id="btn-buscar-direccion" type="button" style="margin:0; width:auto; white-space:nowrap;">🔍 Buscar</button>
         </div>
         <div id="direccion-resultados" style="display:none; margin-bottom:8px; max-height:160px; overflow-y:auto; border:1px solid var(--line); border-radius:7px;"></div>
@@ -306,6 +320,7 @@
 
       <button class="btn" id="btn-geo" type="button">📍 Obtener ubicación actual</button>
       <button class="btn" id="btn-registrar" type="button" disabled>Registrar actividad</button>
+      <p class="mono" style="font-size:10.5px; color:var(--ink-soft); margin:8px 0 0; text-align:center;">* Campos obligatorios (N° de serie y fotos son opcionales)</p>
     </div>
   </div>
 
@@ -354,7 +369,7 @@
         <table>
           <thead>
             <tr>
-              <th>Tipo</th><th>Zona</th><th>Cliente</th><th>N° SAP</th><th>Equipo</th><th>Litros</th>
+              <th>Tipo</th><th>Zona</th><th>Cliente</th><th>RUT</th><th>N° SAP</th><th>N° Serie</th><th>Orden PO</th><th>Equipo</th><th>Litros</th>
               <th>Técnico</th><th>Fecha</th><th>Dirección</th><th>Coordenadas</th><th></th>
             </tr>
           </thead>
@@ -409,8 +424,12 @@ const FLOW_READ_URL  = 'https://default5f8f1b315fca45ff958cf12d692003.14.environ
 
 // Lista de números SAP válidos (Google Sheets publicado como CSV)
 const SAP_LIST_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRCD6sJdwySHBYGec_LgcUy7xXwt1eUElsQrtMbemVc156xetI9pJQqrCflENZVvVX_ZmfAnJtEsjPV/pub?output=csv';
-let sapValidos = new Map(); // sap -> descripción (si existe)
+// Segunda lista ampliada, solo para actividades de Recarga combustible (pestaña separada del mismo Sheets)
+const SAP_LIST_URL_RECARGA = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRCD6sJdwySHBYGec_LgcUy7xXwt1eUElsQrtMbemVc156xetI9pJQqrCflENZVvVX_ZmfAnJtEsjPV/pub?gid=512591144&single=true&output=csv';
+let sapValidos = new Map(); // sap -> descripción (Entrega/Retiro)
+let sapValidosRecarga = new Map(); // sap -> descripción (extra, solo Recarga)
 let sapListoCargado = false;
+let sapRecargaListoCargado = false;
 
 let records = [];
 let currentTipo = 'Entrega';
@@ -495,42 +514,83 @@ function renderFotosPreview(){
 }
 
 // ---- Cargar lista de números SAP válidos ----
+async function cargarListaCsv(url, mapaDestino){
+  const res = await fetch(url);
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+  const buf = await res.arrayBuffer();
+  const text = new TextDecoder('utf-8').decode(buf);
+  const rows = text.split(/\r?\n/).filter(r => r.trim() !== '');
+  mapaDestino.clear();
+  rows.slice(1).forEach(row=>{ // salta encabezado
+    const cols = row.split(',').map(c => c.replace(/^"|"$/g, '').trim());
+    const sap = cols[0];
+    const desc = cols[1] || '';
+    if(sap) mapaDestino.set(sap, desc);
+  });
+}
+
+// Devuelve la lista combinada de SAP válidos según el tipo de actividad activo.
+// Entrega/Retiro: solo la lista principal. Recarga: principal + ampliada.
+function getListaSapActiva(){
+  if(currentTipo === 'Recarga combustible'){
+    const combinado = new Map(sapValidos);
+    sapValidosRecarga.forEach((desc, sap)=>{ if(!combinado.has(sap)) combinado.set(sap, desc); });
+    return combinado;
+  }
+  return sapValidos;
+}
+
+function poblarDatalistSap(){
+  const datalist = document.getElementById('sap-datalist');
+  datalist.innerHTML = '';
+  getListaSapActiva().forEach((desc, sap)=>{
+    const opt = document.createElement('option');
+    opt.value = sap;
+    if(desc) opt.label = desc;
+    datalist.appendChild(opt);
+  });
+}
+
+function actualizarEstadoSapUI(){
+  const statusEl = document.getElementById('sap-status');
+  if(!sapListoCargado && !sapRecargaListoCargado){
+    statusEl.textContent = 'validación SAP no configurada';
+    return;
+  }
+  const activa = getListaSapActiva();
+  const sufijo = currentTipo === 'Recarga combustible' ? ' (incluye lista ampliada de recarga)' : '';
+  statusEl.textContent = activa.size + ' equipos disponibles' + sufijo;
+  poblarDatalistSap();
+}
+
 async function cargarListaSap(){
   const statusEl = document.getElementById('sap-status');
   if(!SAP_LIST_URL || SAP_LIST_URL.includes('PEGAR_AQUI')){
-    statusEl.textContent = 'validación SAP no configurada';
     sapListoCargado = false;
-    return;
+  } else {
+    try{
+      await cargarListaCsv(SAP_LIST_URL, sapValidos);
+      sapListoCargado = true;
+    }catch(e){
+      console.error('Error cargando lista SAP principal', e);
+      sapListoCargado = false;
+      statusEl.textContent = 'no se pudo validar contra la planilla — se acepta cualquier valor';
+    }
   }
-  try{
-    const res = await fetch(SAP_LIST_URL);
-    if(!res.ok) throw new Error('HTTP ' + res.status);
-    const buf = await res.arrayBuffer();
-    const text = new TextDecoder('utf-8').decode(buf);
-    const rows = text.split(/\r?\n/).filter(r => r.trim() !== '');
-    sapValidos.clear();
-    rows.slice(1).forEach(row=>{ // salta encabezado
-      const cols = row.split(',').map(c => c.replace(/^"|"$/g, '').trim());
-      const sap = cols[0];
-      const desc = cols[1] || '';
-      if(sap) sapValidos.set(sap, desc);
-    });
-    // Poblar datalist
-    const datalist = document.getElementById('sap-datalist');
-    datalist.innerHTML = '';
-    sapValidos.forEach((desc, sap)=>{
-      const opt = document.createElement('option');
-      opt.value = sap;
-      if(desc) opt.label = desc;
-      datalist.appendChild(opt);
-    });
-    sapListoCargado = true;
-    statusEl.textContent = sapValidos.size + ' equipos cargados desde la planilla';
-  }catch(e){
-    console.error('Error cargando lista SAP', e);
-    sapListoCargado = false;
-    statusEl.textContent = 'no se pudo validar contra la planilla — se acepta cualquier valor';
+
+  if(!SAP_LIST_URL_RECARGA || SAP_LIST_URL_RECARGA.includes('PEGAR_AQUI')){
+    sapRecargaListoCargado = false;
+  } else {
+    try{
+      await cargarListaCsv(SAP_LIST_URL_RECARGA, sapValidosRecarga);
+      sapRecargaListoCargado = true;
+    }catch(e){
+      console.error('Error cargando lista SAP de recarga', e);
+      sapRecargaListoCargado = false;
+    }
   }
+
+  actualizarEstadoSapUI();
   if(document.getElementById('panel-estado').style.display !== 'none'){
     renderEstadoEquipos();
   }
@@ -541,8 +601,9 @@ cargarListaSap();
 document.getElementById('f-sap').addEventListener('input', ()=>{
   const sapValue = document.getElementById('f-sap').value.trim();
   const display = document.getElementById('f-equipo-display');
-  if(sapListoCargado && sapValidos.has(sapValue)){
-    display.value = sapValidos.get(sapValue);
+  const listaActiva = getListaSapActiva();
+  if((sapListoCargado || sapRecargaListoCargado) && listaActiva.has(sapValue)){
+    display.value = listaActiva.get(sapValue);
     display.style.color = 'var(--ink)';
   } else {
     display.value = '';
@@ -558,6 +619,9 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     currentTipo = btn.dataset.tipo;
     const litrosWrap = document.getElementById('litros-wrap');
     litrosWrap.style.display = (currentTipo === 'Recarga combustible') ? 'block' : 'none';
+    actualizarEstadoSapUI();
+    // Revalida el SAP ya escrito contra la lista correspondiente al nuevo tipo
+    document.getElementById('f-sap').dispatchEvent(new Event('input'));
   });
 });
 
@@ -684,7 +748,7 @@ async function buscarDireccionInversa(lat, lng){
     // No bloquea el registro: la actividad igual se guarda con coordenadas, solo sin texto de dirección.
     if(!previo) campoDireccion.value = '';
   }finally{
-    campoDireccion.placeholder = 'Ej: Av. Errázuriz 1112, Valparaíso';
+    campoDireccion.placeholder = 'Dirección * — Ej: Av. Errázuriz 1112, Valparaíso';
   }
 }
 
@@ -696,20 +760,37 @@ document.getElementById('btn-registrar').addEventListener('click', async ()=>{
   }
   const zona = document.getElementById('f-zona').value;
   const cliente = document.getElementById('f-cliente').value.trim();
+  const rut = document.getElementById('f-rut').value.trim();
+  const direccionValue = document.getElementById('f-direccion').value.trim();
+  const poValue = document.getElementById('f-po').value.trim();
   const equipo = document.getElementById('f-equipo-display').value.trim() || (currentTipo === 'Recarga combustible' ? 'Generador' : '');
-  const litros = currentTipo === 'Recarga combustible' ? (document.getElementById('f-litros').value || '0') : '0';
+  const litrosInput = document.getElementById('f-litros').value.trim();
+  const litros = currentTipo === 'Recarga combustible' ? (litrosInput || '0') : '0';
   const tecnico = document.getElementById('f-tecnico').value.trim();
   const fechaInput = document.getElementById('f-fecha').value;
-  const fecha = fechaInput ? new Date(fechaInput) : new Date();
   const obs = document.getElementById('f-obs').value.trim();
 
-  if(!cliente || !tecnico){
-    showToast('Completa cliente y técnico responsable.', 'error');
+  if(!cliente){ showToast('El campo Cliente / N° es obligatorio.', 'error'); return; }
+  if(!rut){ showToast('El campo RUT del cliente es obligatorio.', 'error'); return; }
+  if(!direccionValue){ showToast('El campo Dirección es obligatorio. Búscala o ingresa coordenadas y espera a que se complete.', 'error'); return; }
+  if(!poValue){ showToast('El campo Orden PO es obligatorio.', 'error'); return; }
+  if(!tecnico){ showToast('El campo Técnico responsable es obligatorio.', 'error'); return; }
+  if(!fechaInput){ showToast('El campo Fecha y hora es obligatorio.', 'error'); return; }
+  if(!obs){ showToast('El campo Observaciones es obligatorio.', 'error'); return; }
+  if(currentTipo === 'Recarga combustible' && !litrosInput){
+    showToast('El campo Litros recargados es obligatorio para actividades de recarga.', 'error');
     return;
   }
 
+  const fecha = new Date(fechaInput);
+
   const sapValue = document.getElementById('f-sap').value.trim();
-  if(sapListoCargado && sapValue){
+  if(!sapValue){
+    showToast('El campo Número SAP es obligatorio.', 'error');
+    return;
+  }
+  const listaSapVigente = (sapListoCargado || sapRecargaListoCargado);
+  if(listaSapVigente && sapValue){
     // Refrescamos contra SharePoint justo antes de validar, por si otro técnico
     // registró una actividad con este mismo SAP hace unos segundos.
     const btnTemp = document.getElementById('btn-registrar');
@@ -719,13 +800,13 @@ document.getElementById('btn-registrar').addEventListener('click', async ()=>{
     btnTemp.disabled = false;
     btnTemp.textContent = textoOriginalBtn;
   }
-  if(sapListoCargado){
-    if(!sapValue){
-      showToast('Selecciona un número SAP válido de la lista.', 'error');
-      return;
-    }
-    if(!sapValidos.has(sapValue)){
-      showToast('Ese número SAP no está en la planilla de equipos. Verifica o selecciónalo de la lista.', 'error');
+  if(listaSapVigente){
+    const listaActiva = getListaSapActiva();
+    if(!listaActiva.has(sapValue)){
+      const mensaje = currentTipo === 'Recarga combustible'
+        ? 'Ese número SAP no está en la planilla de equipos ni en la lista ampliada de recarga. Verifica o selecciónalo de la lista.'
+        : 'Ese número SAP no está en la planilla de equipos. Verifica o selecciónalo de la lista.';
+      showToast(mensaje, 'error');
       return;
     }
     if(currentTipo === 'Entrega'){
@@ -744,8 +825,11 @@ document.getElementById('btn-registrar').addEventListener('click', async ()=>{
     fecha: fecha.toISOString(),
     lat: currentCoords.lat, lng: currentCoords.lng,
     obs,
-    sap: document.getElementById('f-sap').value.trim(),
-    direccion: document.getElementById('f-direccion').value.trim(),
+    sap: sapValue,
+    direccion: direccionValue,
+    serie: document.getElementById('f-serie').value.trim(),
+    po: poValue,
+    rut,
     foto1Base64: currentPhotos[0] ? currentPhotos[0].base64 : '',
     foto1Nombre: currentPhotos[0] ? currentPhotos[0].filename : '',
     foto1Mime: currentPhotos[0] ? currentPhotos[0].mimeType : '',
@@ -782,6 +866,9 @@ function resetForm(){
   document.getElementById('f-cliente').value = '';
   document.getElementById('f-sap').value = '';
   document.getElementById('f-equipo-display').value = '';
+  document.getElementById('f-serie').value = '';
+  document.getElementById('f-po').value = '';
+  document.getElementById('f-rut').value = '';
   document.getElementById('f-litros').value = '';
   document.getElementById('f-tecnico').value = '';
   document.getElementById('f-fecha').value = '';
@@ -857,7 +944,10 @@ function renderTable(){
       <td><span class="badge ${badgeClass(r.tipo)}">${r.tipo === 'Recarga combustible' ? 'Recarga' : r.tipo}</span></td>
       <td>${r.zona}</td>
       <td>${r.cliente}</td>
+      <td class="mono">${r.rut || '—'}</td>
       <td class="mono">${r.sap || '—'}</td>
+      <td class="mono">${r.serie || '—'}</td>
+      <td class="mono">${r.po || '—'}</td>
       <td>${r.equipo}</td>
       <td>${(r.litros && parseFloat(r.litros) > 0) ? r.litros + ' L' : '—'}</td>
       <td>${r.tecnico}</td>
@@ -886,7 +976,10 @@ function renderMap(){
       <div style="font-family:'IBM Plex Sans',sans-serif; font-size:12.5px; line-height:1.5;">
         <strong>${r.tipo}</strong> — ${r.zona}<br>
         Cliente: ${r.cliente}<br>
+        ${r.rut ? 'RUT: ' + r.rut + '<br>' : ''}
         ${r.sap ? 'N° SAP: ' + r.sap + '<br>' : ''}
+        ${r.serie ? 'N° Serie: ' + r.serie + '<br>' : ''}
+        ${r.po ? 'Orden PO: ' + r.po + '<br>' : ''}
         ${r.direccion ? 'Dirección: ' + r.direccion + '<br>' : ''}
         ${r.equipo !== '—' ? 'Equipo: ' + r.equipo + '<br>' : ''}
         ${r.litros ? 'Litros: ' + r.litros + ' L<br>' : ''}
@@ -1030,10 +1123,10 @@ document.getElementById('filt-ultimo-cliente').addEventListener('change', ()=>{ 
 // ---- CSV export ----
 document.getElementById('btn-export').addEventListener('click', ()=>{
   if(!records.length){ showToast('No hay registros para exportar.', 'error'); return; }
-  const headers = ['Tipo','Zona','Cliente','Equipo','Litros','Tecnico','Fecha','Latitud','Longitud','Observaciones'];
+  const headers = ['Tipo','Zona','Cliente','RUT','SAP','N_Serie','Orden_PO','Equipo','Litros','Tecnico','Fecha','Direccion','Latitud','Longitud','Observaciones'];
   const rows = records.map(r => [
-    r.tipo, r.zona, r.cliente, r.equipo, r.litros, r.tecnico,
-    new Date(r.fecha).toLocaleString('es-CL'), r.lat, r.lng, (r.obs||'').replace(/[\n\r,]/g,' ')
+    r.tipo, r.zona, r.cliente, r.rut, r.sap, r.serie, r.po, r.equipo, r.litros, r.tecnico,
+    new Date(r.fecha).toLocaleString('es-CL'), (r.direccion||''), r.lat, r.lng, (r.obs||'').replace(/[\n\r,]/g,' ')
   ]);
   const csv = [headers, ...rows].map(row => row.map(v => `"${v}"`).join(',')).join('\n');
   const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -1069,6 +1162,9 @@ async function loadRecords(){
       fecha: item.fecha ?? new Date().toISOString(),
       sap: item.sap ?? '',
       direccion: item.direccion ?? '',
+      serie: item.serie ?? '',
+      po: item.po ?? '',
+      rut: item.rut ?? '',
       lat: parseFloat(item.lat),
       lng: parseFloat(item.lng),
       obs: item.obs ?? ''
