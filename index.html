@@ -370,7 +370,7 @@
           <thead>
             <tr>
               <th>Tipo</th><th>Zona</th><th>Cliente</th><th>RUT</th><th>N° SAP</th><th>N° Serie</th><th>Orden PO</th><th>Equipo</th><th>Litros</th>
-              <th>Técnico</th><th>Fecha</th><th>Dirección</th><th>Coordenadas</th><th></th>
+              <th>Técnico</th><th>Fecha</th><th>Dirección</th><th>Observaciones</th><th></th>
             </tr>
           </thead>
           <tbody id="tbody"></tbody>
@@ -515,7 +515,10 @@ function renderFotosPreview(){
 
 // ---- Cargar lista de números SAP válidos ----
 async function cargarListaCsv(url, mapaDestino){
-  const res = await fetch(url);
+  // Se agrega un parámetro con la hora actual para evitar que el navegador
+  // o Google sirvan una copia en caché desactualizada del CSV.
+  const urlSinCache = url + (url.includes('?') ? '&' : '?') + '_=' + Date.now();
+  const res = await fetch(urlSinCache, { cache: 'no-store' });
   if(!res.ok) throw new Error('HTTP ' + res.status);
   const buf = await res.arrayBuffer();
   const text = new TextDecoder('utf-8').decode(buf);
@@ -951,7 +954,7 @@ function renderTable(){
       <td>${r.tecnico}</td>
       <td class="mono">${fechaFmt}</td>
       <td style="white-space:normal; max-width:220px;">${r.direccion || '—'}</td>
-      <td class="mono">${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}</td>
+      <td style="white-space:normal; max-width:220px;">${r.obs || '—'}</td>
       <td><button class="del-btn" onclick="event.stopPropagation(); deleteRecord('${r.id}')" title="Eliminar">✕</button></td>
     `;
     tbody.appendChild(tr);
