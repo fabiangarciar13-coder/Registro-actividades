@@ -153,6 +153,10 @@
   .btn-secondary:hover{background:var(--bg); color:var(--ink);}
 
   #map{height:420px; width:100%;}
+  #map-wrap:fullscreen{background:#fff;}
+  #map-wrap:fullscreen #map{height:100vh;}
+  #map-wrap:-webkit-full-screen{background:#fff;}
+  #map-wrap:-webkit-full-screen #map{height:100vh;}
 
   .table-wrap{max-height:420px; overflow:auto;}
   table{width:100%; border-collapse:collapse; font-size:12.5px;}
@@ -330,9 +334,14 @@
     <div class="panel">
       <div class="panel-head">
         <h2>Mapa de actividades</h2>
-        <span class="mono" style="font-size:11px; color:var(--ink-soft);" id="map-count">0 registros</span>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span class="mono" style="font-size:11px; color:var(--ink-soft);" id="map-count">0 registros</span>
+          <button id="btn-fullscreen-map" type="button" title="Ver mapa en pantalla completa" style="background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:5px 9px; cursor:pointer; font-size:13px; line-height:1;">⛶</button>
+        </div>
       </div>
-      <div id="map"></div>
+      <div id="map-wrap" style="position:relative;">
+        <div id="map"></div>
+      </div>
     </div>
 
     <div class="panel">
@@ -1184,6 +1193,29 @@ async function loadRecords(){
 
 initMap();
 loadRecords();
+
+// ---- Pantalla completa del mapa ----
+document.getElementById('btn-fullscreen-map').addEventListener('click', ()=>{
+  const wrap = document.getElementById('map-wrap');
+  if(!document.fullscreenElement && !document.webkitFullscreenElement){
+    if(wrap.requestFullscreen) wrap.requestFullscreen();
+    else if(wrap.webkitRequestFullscreen) wrap.webkitRequestFullscreen(); // Safari/iOS
+  } else {
+    if(document.exitFullscreen) document.exitFullscreen();
+    else if(document.webkitExitFullscreen) document.webkitExitFullscreen();
+  }
+});
+
+function alSalirOEntrarFullscreen(){
+  const btn = document.getElementById('btn-fullscreen-map');
+  const enFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  btn.textContent = enFullscreen ? '✕' : '⛶';
+  btn.title = enFullscreen ? 'Salir de pantalla completa' : 'Ver mapa en pantalla completa';
+  // Leaflet necesita que le avisen del cambio de tamaño para redibujar bien
+  setTimeout(()=>{ if(map) map.invalidateSize(); }, 150);
+}
+document.addEventListener('fullscreenchange', alSalirOEntrarFullscreen);
+document.addEventListener('webkitfullscreenchange', alSalirOEntrarFullscreen);
 
 // ---- Botón de actualización manual ----
 document.getElementById('btn-refrescar').addEventListener('click', ()=>{
