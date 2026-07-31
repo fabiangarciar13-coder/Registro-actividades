@@ -297,8 +297,13 @@
 
       <label>Fotos de evidencia (máx. 3)</label>
       <div class="geo-box" style="margin-top:6px;">
-        <input type="file" id="f-foto" accept="image/*" capture="environment" style="display:none;">
-        <button type="button" class="btn-secondary" id="btn-foto" style="width:100%; margin:0;">📷 Agregar foto (0/3)</button>
+        <input type="file" id="f-foto-camara" accept="image/*" capture="environment" style="display:none;">
+        <input type="file" id="f-foto-galeria" accept="image/*" style="display:none;">
+        <div class="row2">
+          <button type="button" class="btn-secondary" id="btn-foto-camara" style="width:100%; margin:0;">📷 Tomar foto</button>
+          <button type="button" class="btn-secondary" id="btn-foto-galeria" style="width:100%; margin:0;">🖼️ Galería</button>
+        </div>
+        <p class="mono" id="contador-fotos" style="font-size:10.5px; color:var(--ink-soft); margin:6px 0 0; text-align:center;">0/3 fotos agregadas</p>
         <div id="fotos-preview-wrap" style="display:none; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:10px;"></div>
       </div>
 
@@ -465,16 +470,18 @@ function showToast(msg, type){
   setTimeout(()=> t.classList.remove('show'), 3200);
 }
 
-// ---- Foto de evidencia (hasta 3) ----
-document.getElementById('btn-foto').addEventListener('click', ()=>{
+// ---- Foto de evidencia (hasta 3) — botones separados de cámara y galería ----
+function abrirSelectorFoto(inputId){
   if(currentPhotos.length >= 3){
     showToast('Ya tienes 3 fotos. Quita una para agregar otra.', 'error');
     return;
   }
-  document.getElementById('f-foto').click();
-});
+  document.getElementById(inputId).click();
+}
+document.getElementById('btn-foto-camara').addEventListener('click', ()=> abrirSelectorFoto('f-foto-camara'));
+document.getElementById('btn-foto-galeria').addEventListener('click', ()=> abrirSelectorFoto('f-foto-galeria'));
 
-document.getElementById('f-foto').addEventListener('change', (e)=>{
+function manejarArchivoFoto(e){
   const file = e.target.files[0];
   if(!file) return;
   if(currentPhotos.length >= 3){
@@ -497,11 +504,13 @@ document.getElementById('f-foto').addEventListener('change', (e)=>{
     e.target.value = '';
   };
   reader.readAsDataURL(file);
-});
+}
+document.getElementById('f-foto-camara').addEventListener('change', manejarArchivoFoto);
+document.getElementById('f-foto-galeria').addEventListener('change', manejarArchivoFoto);
 
 function renderFotosPreview(){
   const wrap = document.getElementById('fotos-preview-wrap');
-  const btn = document.getElementById('btn-foto');
+  const contador = document.getElementById('contador-fotos');
   wrap.innerHTML = '';
   wrap.style.display = currentPhotos.length ? 'grid' : 'none';
   currentPhotos.forEach((foto, i)=>{
@@ -519,7 +528,10 @@ function renderFotosPreview(){
       renderFotosPreview();
     });
   });
-  btn.textContent = `📷 Agregar foto (${currentPhotos.length}/3)`;
+  contador.textContent = `${currentPhotos.length}/3 fotos agregadas`;
+  const limite = currentPhotos.length >= 3;
+  document.getElementById('btn-foto-camara').disabled = limite;
+  document.getElementById('btn-foto-galeria').disabled = limite;
 }
 
 // ---- Cargar lista de números SAP válidos ----
@@ -890,7 +902,8 @@ function resetForm(){
   document.getElementById('direccion-resultados').innerHTML = '';
   currentCoords = null;
   currentPhotos = [];
-  document.getElementById('f-foto').value = '';
+  document.getElementById('f-foto-camara').value = '';
+  document.getElementById('f-foto-galeria').value = '';
   renderFotosPreview();
   setGeoStatus('', 'sin geolocalizar');
   document.getElementById('btn-registrar').disabled = true;
